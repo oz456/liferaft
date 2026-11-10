@@ -1,0 +1,8 @@
+# ==============================================================================
+# liferaft-cron — The Midnight Watchman
+# Task 5: Schedule the script to run daily using cron.
+# "Runs every night at 02:00 AM while the world sleeps peacefully."
+# ==============================================================================
+
+# m   h   dom mon dow   user   command
+0     2   *   *   *     root   /usr/local/bin/liferaft >> /backup/liferaft.log 2>&1

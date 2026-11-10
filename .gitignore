@@ -1,0 +1,11 @@
+# Archives & logs
+*.tar.gz
+*.log
+
+# Temp directories
+/tmp/
+/restore_test/
+
+# Local agent configs
+agy.conf
+.system_generated/
