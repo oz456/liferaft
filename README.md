@@ -1,78 +1,59 @@
 # 🛟 Liferaft: Linux Backup and Automation System
 
-> *"No bloat, no 40-layer abstractions. Just pure UNIX reliability."*  
-> An automated daily backup, logging, 7-day retention, and disaster-recovery pipeline.
+A simple, direct Linux backup system built from first principles with Bash, `tar`, and `cron`.
 
 ---
 
-## 📂 File Structure (Flat & Zero Overhead)
+## 📂 The Files (Only what is needed)
 
-```text
-liferaft/
-├── backup.conf    # Configuration: sources, destination (/backup), retention (7 days)
-├── backup.sh      # Core engine: tar archiving, gzip, logging & 7-day retention
-├── restore.sh     # Disaster recovery: Task 8 test extraction into /tmp
-├── setup.sh       # System installer: Task 1 (/backup + chmod 700) & Task 5 (cron)
-├── test.sh        # Self-contained automated test suite (runs without root)
-├── agy.conf       # Antigravity session resumption script
-└── README.md      # This guide and verification checklist
-```
+* **[`backup.conf`](file:///home/omni/Projects/liferaft/backup.conf)** — 4 settings (where to save, what to backup, retention days, log path).
+* **[`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh)** — The core backup script: tar compression, date naming, logging, and 7-day cleanup.
+* **[`restore.sh`](file:///home/omni/Projects/liferaft/restore.sh)** — Task 8 recovery script: extracts the latest backup into `/tmp/restore_test`.
+* **[`setup.sh`](file:///home/omni/Projects/liferaft/setup.sh)** — One-time setup: creates `/backup` with `chmod 700` and adds the daily cron job.
+* **[`test.sh`](file:///home/omni/Projects/liferaft/test.sh)** — Automated test script that checks everything without needing root.
 
 ---
 
-## 🗺️ How the Files Map to Your 8 Tasks
+## 🧭 How it Works (First Principles)
 
-| Task | Requirement | Solved In | Details |
-| :---: | :--- | :--- | :--- |
-| **1** | Backup destination with permissions | [`setup.sh`](file:///home/omni/Projects/liferaft/setup.sh) | Creates `/backup` with `chmod 700` (owned by `root:root`). |
-| **2** | Archive selected dirs (`/etc`, `/home`) | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Bundles configured targets into an archive. |
-| **3** | Tar with date naming & compression | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Generates `backup-YYYY-MM-DD_HHMMSS.tar.gz` using `tar -czf`. |
-| **4** | Logging and basic error handling | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Records timestamps to `/backup/backup.log` & traps errors. |
-| **5** | Schedule script to run daily via cron | [`setup.sh`](file:///home/omni/Projects/liferaft/setup.sh) | Installs `0 2 * * * root /usr/local/bin/backup-system` in `/etc/cron.d/`. |
-| **6** | 7-day retention cleanup | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Automatically prunes archives older than 7 days via `find -mtime +7`. |
-| **7** | Manual run & inspect archive/log | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Supports `./backup.sh`, `./backup.sh --list`, `./backup.sh --toc`. |
-| **8** | Restore files into test directory | [`restore.sh`](file:///home/omni/Projects/liferaft/restore.sh) | Extracts files into `/tmp/restore_test` and confirms integrity. |
+1. **Setup (`setup.sh`):**
+   * Creates `/backup` owned by `root:root` with `chmod 700` so normal users cannot read sensitive data.
+   * Adds a daily job to `/etc/cron.d/backup-job` to run every night at 2:00 AM (`0 2 * * *`).
+
+2. **Backup (`backup.sh`):**
+   * Uses `date +%Y-%m-%d_%H%M%S` for unique archive names (`backup-YYYY-MM-DD_HHMMSS.tar.gz`).
+   * Bundles `/etc` and `/home` using `tar -czf`.
+   * Logs every run with timestamps to `/backup/backup.log`.
+   * Deletes backups older than 7 days using `find /backup -mtime +7 -delete`.
+
+3. **Restore (`restore.sh`):**
+   * Takes the latest backup and extracts it into `/tmp/restore_test` using `tar -xzf`.
+   * Lists the recovered files to prove disaster recovery works.
 
 ---
 
-## 🧪 Quick Test (No Root Required)
+## 🧪 Run Tests (Takes 1 second, No Root needed)
 
-You can run the entire test suite in 1 second:
 ```bash
 ./test.sh
 ```
 
 ---
 
-## 🚀 Live System Deployment (For Grading & Production)
+## 🚀 Live System Usage (With Sudo)
 
-### 1. Run Setup (Creates `/backup` with `chmod 700` and configures `cron`)
 ```bash
+# 1. Install & configure permissions + cron
 sudo ./setup.sh
-```
 
-### 2. Run Backup Manually
-```bash
-sudo backup-system
-# Or from this directory:
-sudo ./backup.sh
-```
+# 2. Run backup manually
+sudo /usr/local/bin/backup.sh
 
-### 3. Inspect Table of Contents (`tar -tzf`)
-```bash
-sudo ./backup.sh --toc
-```
-
-### 4. Inspect Execution Log
-```bash
-cat /backup/backup.log
-```
-
-### 5. Prove Disaster Recovery (Task 8 Test Extraction)
-```bash
+# 3. Test file recovery
 sudo ./restore.sh
-# Check restored files:
-ls -la /tmp/restore_test
+
+# 4. View logs
+cat /backup/backup.log
 ```
 
 ---
@@ -80,6 +61,7 @@ ls -la /tmp/restore_test
 ## 📋 Evaluator Verification Checklist
 
 * **Syntax Check:** `bash -n backup.sh && bash -n restore.sh && bash -n setup.sh`
-* **Cron Schedule:** `cat /etc/cron.d/backup-system` or `sudo crontab -l`
-* **Secure Vault:** `ls -ld /backup` *(Output: `drwx------ root root /backup`)*
-* **Retention Verification:** Run `./test.sh` to see simulated 10-day-old files pruned automatically.
+* **Cron Check:** `cat /etc/cron.d/backup-job`
+* **Folder Permissions:** `ls -ld /backup` *(Output: `drwx------ root root /backup`)*
+* **Inspect Archive:** `tar -tzf /backup/backup-*.tar.gz | head -n 15`
+* **Check Recovery:** `ls -l /tmp/restore_test`
