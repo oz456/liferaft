@@ -1,66 +1,85 @@
-# 🛟 Liferaft: Linux Backup & Automation System
+# 🛟 Liferaft: Linux Backup and Automation System
 
-> *"When your server goes down with the Titanic, you don't debate Jira tickets or groom backlogs. You deploy the liferaft."*  
-> An opinionated, zero-bloat automated daily backup and disaster-recovery pipeline.
-
----
-
-## The Philosophy (The DHH Way)
-
-Modern sysadmin work is poisoned by overcomplication. People install 500 MB container agents with 40 Python dependencies just to copy three directories onto a disk. 
-
-We reject that noise. 
-
-UNIX gave us `tar`, `gzip`, `find`, and `cron` between 1975 and 1979. They were perfected decades ago. **Liferaft** honors that craftsmanship:
-- **Convention over configuration:** Sane defaults in a single, human-readable config.
-- **Fail loud, fail early:** Strict Bash (`set -euo pipefail`) with error traps and clear audit logs.
-- **No untested hopes:** A backup you haven't restored is a myth. Recovery drills are built right into the workflow.
+> *"No bloat, no 40-layer abstractions. Just pure UNIX reliability."*  
+> An automated daily backup, logging, 7-day retention, and disaster-recovery pipeline.
 
 ---
 
-## 📂 Project Architecture
+## 📂 File Structure (Flat & Zero Overhead)
 
 ```text
 liferaft/
-├── config/
-│   └── liferaft.conf       # Sane defaults: target paths, retention, vault directory
-├── cron/
-│   └── liferaft-cron       # The 02:00 AM daily cron watchman
-├── lib/
-│   ├── archive.sh          # Task 2 & 3: Tar bundling & gzip compression
-│   ├── retention.sh        # Task 6: 7-day automated pruning (The Grim Reaper)
-│   └── logger.sh           # Task 4: Timestamped ledger & error traps
-├── bin/
-│   └── liferaft            # The Captain's Bridge: main executable orchestrator
-├── restore.sh              # Task 8: Disaster recovery drill & test extraction
-├── setup.sh                # Task 1 & 5: One-shot vault creation & cron registration
-└── README.md               # The Manifesto & Team Delegation Board
+├── backup.conf    # Configuration: sources, destination (/backup), retention (7 days)
+├── backup.sh      # Core engine: tar archiving, gzip, logging & 7-day retention
+├── restore.sh     # Disaster recovery: Task 8 test extraction into /tmp
+├── setup.sh       # System installer: Task 1 (/backup + chmod 700) & Task 5 (cron)
+├── test.sh        # Self-contained automated test suite (runs without root)
+├── agy.conf       # Antigravity session resumption script
+└── README.md      # This guide and verification checklist
 ```
 
 ---
 
-## 👥 Team Work Breakdown (Assign These to Your Team)
+## 🗺️ How the Files Map to Your 8 Tasks
 
-| Teammate | Focus Area | Files to Implement | Core Tasks Covered |
-| :--- | :--- | :--- | :--- |
-| **Teammate 1** | **The Shipyard (Setup & Permissions)** | `setup.sh`, `cron/liferaft-cron` | **Task 1:** Create `/backup` with `chmod 700`<br>**Task 5:** Install daily `cron` job |
-| **Teammate 2** | **The Cargo Master (Tar & Compression)** | `lib/archive.sh`, `config/liferaft.conf` | **Task 2:** Archive `/etc` and `/home`<br>**Task 3:** Dynamic timestamp & gzip compression |
-| **Teammate 3** | **The Ledger & Reaper (Logs & Retention)** | `lib/logger.sh`, `lib/retention.sh` | **Task 4:** Logging & error traps<br>**Task 6:** 7-day cleanup via `find -mtime +7` |
-| **Teammate 4** | **The Quartermaster (Recovery & Verification)** | `restore.sh`, `bin/liferaft` | **Task 7:** Manual run & audit<br>**Task 8:** Disaster drill extraction into `/tmp` |
-
-*(Each file has explicit `TODO: [Teammate - ...]` markers with sample syntax to guide implementation).*
+| Task | Requirement | Solved In | Details |
+| :---: | :--- | :--- | :--- |
+| **1** | Backup destination with permissions | [`setup.sh`](file:///home/omni/Projects/liferaft/setup.sh) | Creates `/backup` with `chmod 700` (owned by `root:root`). |
+| **2** | Archive selected dirs (`/etc`, `/home`) | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Bundles configured targets into an archive. |
+| **3** | Tar with date naming & compression | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Generates `backup-YYYY-MM-DD_HHMMSS.tar.gz` using `tar -czf`. |
+| **4** | Logging and basic error handling | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Records timestamps to `/backup/backup.log` & traps errors. |
+| **5** | Schedule script to run daily via cron | [`setup.sh`](file:///home/omni/Projects/liferaft/setup.sh) | Installs `0 2 * * * root /usr/local/bin/backup-system` in `/etc/cron.d/`. |
+| **6** | 7-day retention cleanup | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Automatically prunes archives older than 7 days via `find -mtime +7`. |
+| **7** | Manual run & inspect archive/log | [`backup.sh`](file:///home/omni/Projects/liferaft/backup.sh) | Supports `./backup.sh`, `./backup.sh --list`, `./backup.sh --toc`. |
+| **8** | Restore files into test directory | [`restore.sh`](file:///home/omni/Projects/liferaft/restore.sh) | Extracts files into `/tmp/restore_test` and confirms integrity. |
 
 ---
 
-## 🎯 Verification Checklist (Evidence for Evaluator)
+## 🧪 Quick Test (No Root Required)
 
-| Requirement | Verification Command | Expected Output |
-| :--- | :--- | :--- |
-| **1. Syntax Check** | `bash -n bin/liferaft && bash -n restore.sh` | Clean exit (no syntax errors). |
-| **2. Permissions** | `ls -ld /backup` | `drwx------ root root /backup` (700). |
-| **3. Scheduled Cron** | `sudo crontab -l` or `cat /etc/cron.d/liferaft` | Shows `0 2 * * * root /usr/local/bin/liferaft`. |
-| **4. Manual Execution** | `sudo ./bin/liferaft` | Creates stamped archive and appends to log. |
-| **5. Archive Table of Contents** | `tar -tzf /backup/liferaft-*.tar.gz \| head -n 15` | Lists contents without unpacking. |
-| **6. Disaster Recovery Test** | `sudo ./restore.sh /tmp/liferaft_restore_test` | Extracts files into sandbox; proves integrity. |
-| **7. Retention Check** | `touch -d "8 days ago" /backup/liferaft-old.tar.gz && sudo ./bin/liferaft` | Old file gets detected and deleted. |
-| **8. Audit Trail** | `cat /backup/liferaft.log` | Displays clean `[INFO]`, `[SUCCESS]` timestamps. |
+You can run the entire test suite in 1 second:
+```bash
+./test.sh
+```
+
+---
+
+## 🚀 Live System Deployment (For Grading & Production)
+
+### 1. Run Setup (Creates `/backup` with `chmod 700` and configures `cron`)
+```bash
+sudo ./setup.sh
+```
+
+### 2. Run Backup Manually
+```bash
+sudo backup-system
+# Or from this directory:
+sudo ./backup.sh
+```
+
+### 3. Inspect Table of Contents (`tar -tzf`)
+```bash
+sudo ./backup.sh --toc
+```
+
+### 4. Inspect Execution Log
+```bash
+cat /backup/backup.log
+```
+
+### 5. Prove Disaster Recovery (Task 8 Test Extraction)
+```bash
+sudo ./restore.sh
+# Check restored files:
+ls -la /tmp/restore_test
+```
+
+---
+
+## 📋 Evaluator Verification Checklist
+
+* **Syntax Check:** `bash -n backup.sh && bash -n restore.sh && bash -n setup.sh`
+* **Cron Schedule:** `cat /etc/cron.d/backup-system` or `sudo crontab -l`
+* **Secure Vault:** `ls -ld /backup` *(Output: `drwx------ root root /backup`)*
+* **Retention Verification:** Run `./test.sh` to see simulated 10-day-old files pruned automatically.

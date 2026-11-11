@@ -1,61 +1,64 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# setup.sh — The Shipyard Installer
-# "One script to set the stage, lock the doors, and set the alarm."
-# Task 1: Create /backup with appropriate permissions
-# Task 5: Install daily cron job
+# setup.sh — One-Shot Environment & Cron Installer
+# Task 1: Create /backup destination with strict permissions
+# Task 5: Schedule daily cron job
 # ==============================================================================
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=config/liferaft.conf
-source "${PROJECT_ROOT}/config/liferaft.conf"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "🛠️  Preparing the Liferaft environment..."
+# Load configuration if available
+if [[ -f "${SCRIPT_DIR}/backup.conf" ]]; then
+    # shellcheck source=backup.conf
+    source "${SCRIPT_DIR}/backup.conf"
+else
+    BACKUP_DEST="/backup"
+fi
 
-# ------------------------------------------------------------------------------
-# 1. Check Root Privileges
-# ------------------------------------------------------------------------------
+echo "🛠️  Setting up the Backup & Automation System..."
+
+# Check root privileges
 if [[ "$EUID" -ne 0 ]]; then
-    echo "⚠️  Liferaft system installation requires root privileges to configure /backup and /etc/cron.d/."
+    echo "⚠️  Setup requires root permissions to configure /backup and /etc/cron.d/."
     echo "    Please run: sudo ./setup.sh"
     echo ""
-    echo "    (Tip: If running in a local unprivileged environment for testing, run:"
-    echo "     ./tests/test_liferaft.sh)"
+    echo "    (Tip: To run automated verification without root, use: ./test.sh)"
     exit 1
 fi
 
 # ------------------------------------------------------------------------------
-# 2. Task 1: Create Backup Vault with Strict Permissions
+# Task 1: Create /backup with strict permissions (chmod 700, root:root)
 # ------------------------------------------------------------------------------
-echo "📁 Setting up vault at $BACKUP_DEST..."
+echo "📁 Configuring secure repository at ${BACKUP_DEST}..."
 mkdir -p "$BACKUP_DEST"
 chown root:root "$BACKUP_DEST"
 chmod 700 "$BACKUP_DEST"
-echo "   [✓] $BACKUP_DEST secured with permissions 700 (owner root:root)."
+echo "   [✓] ${BACKUP_DEST} secured (permissions: 700, owner: root:root)"
 
 # ------------------------------------------------------------------------------
-# 3. Task 5: Install Executable & Cron Job
+# Task 5: Install executable and daily cron schedule
 # ------------------------------------------------------------------------------
-echo "⏱️  Installing liferaft executable into /usr/local/bin..."
-chmod +x "${PROJECT_ROOT}/bin/liferaft"
-chmod +x "${PROJECT_ROOT}/restore.sh"
-cp "${PROJECT_ROOT}/bin/liferaft" /usr/local/bin/liferaft
-chmod 755 /usr/local/bin/liferaft
-echo "   [✓] /usr/local/bin/liferaft installed and executable."
+echo "⏱️  Installing executable to /usr/local/bin/backup-system..."
+chmod +x "${SCRIPT_DIR}/backup.sh"
+chmod +x "${SCRIPT_DIR}/restore.sh"
+cp "${SCRIPT_DIR}/backup.sh" /usr/local/bin/backup-system
+chmod 755 /usr/local/bin/backup-system
+echo "   [✓] /usr/local/bin/backup-system installed."
 
-echo "🕒 Installing daily cron schedule..."
+echo "🕒 Registering daily cron job (02:00 AM)..."
+CRON_JOB="0 2 * * * root /usr/local/bin/backup-system >> ${BACKUP_DEST}/backup.log 2>&1"
+
 if [[ -d "/etc/cron.d" ]]; then
-    cp "${PROJECT_ROOT}/cron/liferaft-cron" /etc/cron.d/liferaft
-    chmod 644 /etc/cron.d/liferaft
-    chown root:root /etc/cron.d/liferaft
-    echo "   [✓] /etc/cron.d/liferaft installed (02:00 AM daily)."
+    echo "$CRON_JOB" > /etc/cron.d/backup-system
+    chmod 644 /etc/cron.d/backup-system
+    chown root:root /etc/cron.d/backup-system
+    echo "   [✓] /etc/cron.d/backup-system created."
 else
-    # Fallback to crontab if /etc/cron.d does not exist
-    (crontab -l 2>/dev/null | grep -v 'liferaft' || true; cat "${PROJECT_ROOT}/cron/liferaft-cron") | crontab -
-    echo "   [✓] Daily job registered directly in root crontab."
+    (crontab -l 2>/dev/null | grep -v 'backup-system' || true; echo "$CRON_JOB") | crontab -
+    echo "   [✓] Schedule registered in root crontab."
 fi
 
 echo ""
-echo "✨ Installation complete! You can now execute 'liferaft' from anywhere."
+echo "✨ Setup complete! You can now run 'sudo backup-system' from any terminal."

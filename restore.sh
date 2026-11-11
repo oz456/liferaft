@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# restore.sh — The Disaster Rehearsal
+# restore.sh — Disaster Recovery & Test Extraction
 # "A backup that has never been restored is not a backup; it's a superstition."
 # Task 8: Restore selected files into a temporary test directory.
 # ==============================================================================
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=config/liferaft.conf
-source "${PROJECT_ROOT}/config/liferaft.conf"
-# shellcheck source=lib/logger.sh
-source "${PROJECT_ROOT}/lib/logger.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load configuration if available
+if [[ -f "${SCRIPT_DIR}/backup.conf" ]]; then
+    # shellcheck source=backup.conf
+    source "${SCRIPT_DIR}/backup.conf"
+else
+    BACKUP_DEST="${LIFERAFT_DEST:-/backup}"
+    ARCHIVE_PREFIX="backup"
+fi
 
 usage() {
-    echo "Usage: $0 [ARCHIVE_PATH] [SANDBOX_DIR] [SPECIFIC_FILE_OR_PATH...]"
+    echo "Usage: $0 [ARCHIVE_PATH] [SANDBOX_DIR] [SPECIFIC_PATHS...]"
     echo ""
     echo "Examples:"
-    echo "  $0                                        # Restores newest archive to /tmp/liferaft_restore_test"
-    echo "  $0 /backup/liferaft-2026-11-10.tar.gz    # Restores specific archive"
-    echo "  $0 default /tmp/test_dir etc/hosts        # Restores only etc/hosts into /tmp/test_dir"
+    echo "  $0                                      # Restores newest archive into /tmp/restore_test"
+    echo "  $0 /backup/backup-2026-11-10.tar.gz    # Restores specific archive"
+    echo "  $0 default /tmp/my_test etc/hosts      # Restores only etc/hosts"
     exit 0
 }
 
@@ -28,58 +33,55 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 main() {
-    log_msg "INFO" "================ DISASTER RECOVERY DRILL ================"
+    echo "================ DISASTER RECOVERY DRILL ================"
 
-    # 1. Resolve Archive
+    # 1. Resolve archive to restore
     local target_archive="${1:-default}"
     if [[ "$target_archive" == "default" || -z "$target_archive" ]]; then
-        target_archive="$(find "$BACKUP_DEST" -maxdepth 1 -name "${ARCHIVE_PREFIX}-*.${COMPRESSION_EXT}" 2>/dev/null | sort -r | head -n 1 || true)"
+        target_archive="$(find "$BACKUP_DEST" -maxdepth 1 -name "${ARCHIVE_PREFIX}-*.tar.gz" 2>/dev/null | sort -r | head -n 1 || true)"
     fi
 
     if [[ -z "$target_archive" || ! -f "$target_archive" ]]; then
-        log_msg "ERROR" "Archive not found: '$target_archive'. Ensure a backup has been taken first."
+        echo "❌ ERROR: No archive found at '$target_archive'. Run ./backup.sh first."
         exit 1
     fi
 
-    log_msg "INFO" "Selected archive for recovery: ${target_archive}"
+    echo "📦 Selected archive: ${target_archive}"
 
-    # 2. Resolve Sandbox Destination
-    local sandbox_dir="${2:-/tmp/liferaft_restore_test}"
-    log_msg "INFO" "Target sandbox directory: ${sandbox_dir}"
-
+    # 2. Resolve target sandbox directory
+    local sandbox_dir="${2:-/tmp/restore_test}"
+    echo "📁 Sandbox target:   ${sandbox_dir}"
     mkdir -p "$sandbox_dir"
 
-    # Shift past the first two parameters to get any selective paths
+    # Shift past first two arguments to capture any selective files
     shift 2 2>/dev/null || shift $# 2>/dev/null || true
     local selective_paths=("$@")
 
     # 3. Extraction Procedure
     if [[ "${#selective_paths[@]}" -gt 0 ]]; then
-        log_msg "INFO" "Performing selective extraction of: ${selective_paths[*]}"
+        echo "🔍 Extracting selected files: ${selective_paths[*]}"
         tar -xzf "$target_archive" -C "$sandbox_dir" "${selective_paths[@]}"
     else
-        log_msg "INFO" "Extracting archive contents into sandbox..."
+        echo "🚀 Extracting archive contents into sandbox..."
         tar -xzf "$target_archive" -C "$sandbox_dir"
     fi
 
-    # 4. Verification Check
-    local extracted_count
-    extracted_count="$(find "$sandbox_dir" -mindepth 1 | wc -l)"
+    # 4. Verify Recovery
+    local count
+    count="$(find "$sandbox_dir" -mindepth 1 | wc -l)"
 
-    if [[ "$extracted_count" -gt 0 ]]; then
-        log_msg "SUCCESS" "Recovery verified! Extracted ${extracted_count} items into ${sandbox_dir}"
-        echo "----------------------------------------------------------------------"
-        echo "Sample recovered items in sandbox:"
+    if [[ "$count" -gt 0 ]]; then
+        echo "✅ SUCCESS: Restored ${count} items into ${sandbox_dir}"
+        echo "--------------------------------------------------------"
+        echo "Sample restored files in sandbox:"
         find "$sandbox_dir" -maxdepth 3 | head -n 15
         echo "... [verified intact]"
-        echo "----------------------------------------------------------------------"
-        log_msg "SUCCESS" "Disaster recovery rehearsal completed without errors."
+        echo "--------------------------------------------------------"
     else
-        log_msg "ERROR" "Extraction produced 0 items. Recovery verification failed!"
+        echo "❌ ERROR: 0 items were restored. Extraction failed!"
         exit 1
     fi
-
-    log_msg "INFO" "=========================================================="
+    echo "========================================================"
 }
 
 main "$@"
